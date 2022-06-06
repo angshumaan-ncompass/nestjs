@@ -1,4 +1,5 @@
-import { IsNotEmpty } from 'class-validator'
+import {IsNotEmpty} from 'class-validator'
+
 export class CreateReportDto {
     @IsNotEmpty()
     price: number;
@@ -14,6 +15,5 @@ export class CreateReportDto {
 
     @IsNotEmpty()
     mileage: number;
+
 }
-
-

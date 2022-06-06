@@ -1,23 +1,22 @@
 import { Report } from "src/report/entities/report.entity";
-import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity()
 export class User {
-  @PrimaryGeneratedColumn()
-  id: number;
 
+    @PrimaryGeneratedColumn()
+    id: number;
 
-  @Column({ unique: true })
-  email: string;
+    @Column()
+    email: string;
 
-  @Column()
-  password: string;
+    @Column()
+    password: string;
 
-  @Column({ default: false })
-  isAdmin: boolean
+    @Column('boolean', {default: false})
+    isAdmin: boolean = false;
 
-  @OneToMany(() => Report, report => report.user)
-  report: Report[];
-
+    @OneToMany(()=> Report, report => report.user)
+    reports: Report[]
 
 }

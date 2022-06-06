@@ -1,88 +1,49 @@
-import {
-  Controller, Get, Post, Put, Delete, Body, Param, HttpStatus, BadRequestException, SetMetadata, UseGuards, Session, Patch,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Session } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Role } from './entities/role.enum';
 import { Roles } from './roles.decorator';
 import { AuthenticatedGuard } from 'src/auth/authenticated.guard';
+import { DeleteUserDto } from './dto/delete-user-dto';
 
 
 @Controller('user')
 export class UserController {
-  constructor(private usersService: UserService) { }
-
-  @Get('/getUsers')
-  async showAllUsers() {
-
-    const users = await this.usersService.showAll();
-    if (!users) {
-      throw new BadRequestException("Users nor found")
-    }
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Users fetched successfully',
-      users
-    };
-  }
-
+  constructor(private readonly userService: UserService) {}
   @Post('/create')
-  async createUsers(@Body() createUserDto: CreateUserDto,) {
-    const user = await this.usersService.create(createUserDto);
-    if (!user) {
-      throw new BadRequestException
-    }
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'User created successfully',
-      user
-    };
-  }
-
-
-
   // @UseGuards(JwtAuthGuard)
-  @Get('/getUserDetail')
-  async readUser(@Session() session: Record<string, any>) {
-    // console.log(req);
-
-    const data = await this.usersService.read(session);
-    if (!data) {
-      throw new BadRequestException
-    }
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'User fetched successfully',
-      data,
-    };
+  // @Roles(Role.ADMIN)
+  // @UseGuards(AuthenticatedGuard)
+  create(@Request() req, @Body() createUserDto: CreateUserDto) {
+    return this.userService.create(createUserDto);
+  }
+  
+  @Get('/users')
+  findAll( @Session() session: Record<string, any>) {
+    return this.userService.findAll();
   }
 
-  @Patch('/update/:id')
+  @Get('/finduser/:id')
+  findOne(@Param('id') id: string) {
+    return this.userService.findOne(+id);
+  }
+
+  @Patch('/update')
   // @UseGuards(JwtAuthGuard)
   @UseGuards(AuthenticatedGuard)
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Session() session: Record<string, any>) {
-    const isAdmin = session.passport.user.isAdmin;
-    return this.usersService.update(+id, isAdmin, updateUserDto);
+  update(@Body() updateUserDto: UpdateUserDto, @Session() session: Record<string, any>) {
+    const user = session.passport.user;
+    return this.userService.update(user,updateUserDto);
   }
 
-  // @UseGuards(JwtAuthGuard)
-  @UseGuards(AuthenticatedGuard)
   @Delete('/delete')
-  async deleteUser(@Session() session: Record<string, any>) {
-    await this.usersService.delete(session);
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'User deleted successfully',
-    };
+  @UseGuards(AuthenticatedGuard)
+  delete(@Body() deleteUserDto: DeleteUserDto, @Session() session: Record<string, any>){
+    const user = session.passport.user;
+    return this.userService.delete(deleteUserDto, user)
   }
 
 
-
-  // @Post('/login')
-  // signin(@Body() body: SigninDto) {
-  //     return this.usersService.signin(body);
-  // }
 }
-

@@ -1,172 +1,139 @@
-import { Injectable, HttpStatus, HttpException, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
+import { BadRequestException, ConflictException, ForbiddenException,  Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
-import { encodedPassword } from './users.bycrypt';
+import { CreateUserDto } from './dto/create-user.dto';
+import { DeleteUserDto } from './dto/delete-user-dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-
-
-
-
+import { User } from './entities/user.entity';
+import { hashPassword } from './user.bcrypt';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
-    private usersRepository: Repository<User>,
-  ) { }
+    private userRepository: Repository<User>,
+  ){}
 
   async create(createUserDto: CreateUserDto) {
-    const { email } = createUserDto;
-    const isUserExists = await this.usersRepository.findOne({
-      where: { email }
-    });
-    if (isUserExists) {
-      throw new BadRequestException("User already exists")
+    const userData = await this.userRepository.findOne({where: {email: createUserDto.email}});
+    if(userData && userData.email === createUserDto.email){
+      throw new ConflictException("Email already Exists");
     }
-    const password = await encodedPassword(createUserDto.password)
-    const user = await this.usersRepository.save({ ...createUserDto, password })
-    delete user.password;
-    return user;
-  }
-
-  async showAll() {
-    return await this.usersRepository.find();
-  }
-
-
-  async read(session: Record<string, any>) {
-
-    const user = await this.usersRepository.findOne({
-      where: {
-        id: session.passport.user.id
-      }
-    })
-    if (!user) {
-      throw new NotFoundException("id not found")
-    }
-    return user;
-  }
-
-  async update(id: number, isAdmin: boolean, updateUserDto: UpdateUserDto) {
-    const userData = await this.usersRepository.findOne({ where: { id: id } });
-    userData.email = updateUserDto.email;
-    if (isAdmin) {
-      userData.isAdmin = updateUserDto.isAdmin;
-    } else {
-      throw new ForbiddenException('Only Admin can updated isAdmin field')
-    }
-    userData.password = updateUserDto.password;
-    const data = await this.usersRepository.save(userData);
+    const password = await hashPassword(createUserDto.password);
+    createUserDto.password = password;
+    const data = await this.userRepository.save(createUserDto);
     delete data.password;
+    return{
+      message: 'User Added',
+      data: data
+    }
+    
+  }
+
+  async findAll() {
+    const userData = await this.userRepository.find();
+    userData.map(data => delete data.password)
     return {
-      message: 'User Updated',
-      data: data,
+      message: 'Users Retrived',
+      data: userData
     }
   }
 
-  async delete(session: Record<string, any>) {
-    console.log(session.passport);
-
-    const user = await this.usersRepository.delete({
-
-      id: session.passport.user.id
-
-    })
-    if (!user) {
-      throw new NotFoundException("Id not found")
+  async findOne(id: number) {
+    const userData = await this.userRepository.findOne({where:{id: id}});
+    if(!userData){
+      throw new NotFoundException("User Not Found")
     }
-    return { deleted: true };
+    delete userData.password;
+    return {
+      message: 'User Retrived',
+      data: userData
+    };
+  }
+
+  async findOneByEmail(email: string): Promise<User | undefined>{
+    return await this.userRepository.findOne({where:{email : email}})
   }
 
 
-  async findOne(email: string) {
+  async update(user: Record<string, any> ,updateUserDto: UpdateUserDto) {
+    if(!updateUserDto.email && !updateUserDto.id && !updateUserDto.password && !updateUserDto.isAdmin){
+      throw new BadRequestException("No data to update")
+    }
+    let password;
+    if(updateUserDto.password){
+      password = await hashPassword(updateUserDto.password);
+    }
 
-    return await this.usersRepository.findOne({
-      where: {
-        email
+    if(user.isAdmin && updateUserDto.id){
+      const userData = await this.userRepository.findOne({where: {id: updateUserDto.id}});
+      userData.email = updateUserDto.email;
+      userData.password = password;
+      userData.isAdmin = updateUserDto.isAdmin;
+      const data = await this.userRepository.save(userData);
+      delete data.password;
+      return{
+        message: 'User Updated',
+        data: data,
       }
-    })
-  }
+    }
 
-
-  findUserByEmail(email: string) {
-    return this.usersRepository.findOne({
-      where: {
-        email
+    if(user.isAdmin && !updateUserDto.id){
+      const userData = await this.userRepository.findOne({where: {id: user.id}});
+      userData.email = updateUserDto.email;
+      userData.password =password;
+      userData.isAdmin = updateUserDto.isAdmin;
+      const data = await this.userRepository.save(userData);
+      delete data.password;
+      return{
+        message: 'User Updated',
+        data: data,
       }
-    })
-  }
+    }
 
-  findUserById(id: number) {
-    return this.usersRepository.findOne({
-      where: {
-        id
+    if(!user.isAdmin && !updateUserDto.id){
+      const userData = await this.userRepository.findOne({where: {id: user.id}});
+      userData.email = updateUserDto.email;
+      userData.password = password;
+      if(updateUserDto.isAdmin){
+        throw new ForbiddenException('Only admin can update isAdmin field');
       }
-    })
+      const data = await this.userRepository.save(userData);
+      delete data.password;
+      return{
+        message: 'User Updated',
+        data: data,
+      }
+    }
+    if(!user.isAdmin && updateUserDto.id){
+      throw new ForbiddenException("Only admin can update another user data")
+    }
   }
 
-  async findOneByEmail(email: string): Promise<User | undefined> {
-    return await this.usersRepository.findOne({ where: { email: email } })
+  async delete (deleteUserDto: DeleteUserDto, user: Record<string, any>){
+    if(deleteUserDto.id && user.isAdmin){
+      await this.userRepository.delete(deleteUserDto.id);
+      return{
+        message: "User deleted",
+        data:deleteUserDto.id
+      }
+    }
+
+    if(!user.isAdmin && deleteUserDto.id){
+      throw new UnauthorizedException("Only admin can delete another user")
+    }
+
+    if(!deleteUserDto.id){
+      await this.userRepository.delete(user.id);
+      return{
+        message: "User deleted",
+        data:{
+          id: user.id
+        }
+      }
+    }
+
+    
   }
-
-
-
-  remove(id: number) {
-    return `This action removes a #${id} user`;
-  }
-
-  // async signin({ email, password }: SigninParams) {
-  //   const user = await this.usersRepository.findOne({
-  //     where: {
-  //       email
-  //     }
-  //   })
-  //   if (!user) {
-  //     throw new ForbiddenException("Invalid credentials")
-  //   }
-
-  //   const hashedPassword = user.password;
-
-  //   const isValidPassword = await bcrypt.compare(password, hashedPassword)
-
-
-
-  //   if (!isValidPassword) {
-  //     throw new HttpException("Invalid credentials", 404);
-  //   }
-
-  //   const token = await this.generateJWT(user.name, user.id)
-  //   return { "token": token };
-  // }
-
-
-  // private async generateJWT(name: string, id: number) {
-  //   return await jwt.sign({
-  //     name,
-  //     id,
-  //   }, process.env.JWT_SECRET, {
-  //     expiresIn: 3600000
-  //   })
-  // }
-
-
-  // async read(id: number) {
-
-  //     const user = await this.usersRepository.findOne({
-  //         where: {
-  //             id
-  //         }
-  //     })
-  //     if (!user) {
-  //         throw new NotFoundException("id not found")
-  //     }
-  //     return await this.usersRepository.findOne({ where: { id: id } });
-  // }
-
-
-
-
 
 }

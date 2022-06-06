@@ -1,5 +1,7 @@
 import { IsBoolean, IsNotEmpty } from "class-validator";
-export class ApproveReportDto {
+
+export class ApproveReportDto{
+    @IsNotEmpty()
     @IsBoolean()
-    approved?: boolean
+    approved: boolean
 }

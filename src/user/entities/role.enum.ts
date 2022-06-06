@@ -1,4 +1,4 @@
 export const Role = {
-    USER: false,
-    ADMIN: true
+    USER  : false,
+    ADMIN : true
 }
